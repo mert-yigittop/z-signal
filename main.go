@@ -13,9 +13,9 @@ import (
 
 // to configure variables
 var (
-	prbTicker = "inj_tl"
-	bnTicker  = "btcusdt"
-	bnfTicker = "btcusdt"
+	prbTicker = "eth_tl"
+	bnTicker  = "ethusdt"
+	bnfTicker = "ethusdt"
 )
 
 func init() {
