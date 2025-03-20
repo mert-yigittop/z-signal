@@ -104,14 +104,13 @@ func (s *Score) print(orderBook OrderBook) {
 	s.clearConsole()
 	log.Println()
 
-	// Tablo başlıklarını oluştur
 	fmt.Println("+-------------------------+-------------------------+---------------+")
 	fmt.Println("|          BIDS           |           ASKS          |     Z-Score   |")
 	fmt.Println("+-------------------------+-------------------------+---------------+")
 	fmt.Println("|      Price | Quantity   |      Price | Quantity   |               |")
 
-	green := color.New(color.FgGreen).SprintFunc() // Bids için yeşil renk
-	red := color.New(color.FgRed).SprintFunc()     // Asks için kırmızı renk
+	green := color.New(color.FgGreen).SprintFunc()
+	red := color.New(color.FgRed).SprintFunc()
 
 	maxRows := len(orderBook.Bids)
 	if len(orderBook.Asks) > maxRows {
@@ -121,7 +120,6 @@ func (s *Score) print(orderBook OrderBook) {
 	for i := 0; i < maxRows; i++ {
 		var bidStr, askStr string
 
-		// Bids sütunu (Fiyat ve Miktar Yeşil)
 		if i < len(orderBook.Bids) {
 			bid := orderBook.Bids[i]
 			bidStr = fmt.Sprintf("%s | %s", green(fmt.Sprintf("%10.2f", bid.Price)), green(fmt.Sprintf("%10.6f", bid.Quantity)))
@@ -129,7 +127,6 @@ func (s *Score) print(orderBook OrderBook) {
 			bidStr = "                    "
 		}
 
-		// Asks sütunu (Fiyat ve Miktar Kırmızı)
 		if i < len(orderBook.Asks) {
 			ask := orderBook.Asks[i]
 			askStr = fmt.Sprintf("%s | %s", red(fmt.Sprintf("%10.2f", ask.Price)), red(fmt.Sprintf("%10.6f", ask.Quantity)))
