@@ -7,11 +7,17 @@ import (
 	"github.com/starbase-343/ferengi/utils/multiplexer"
 	"github.com/starbase-343/ferengi/utils/streamer"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"runtime"
 	"sort"
 	"sync/atomic"
+)
+
+var (
+	// LevelCount is the number of levels to calculate the z-score
+	LevelCount = 20
 )
 
 type Score struct {
@@ -63,12 +69,11 @@ type OrderBook struct {
 
 func (s *Score) processTicks(ticks []streamer.Tick, streamerCount int) {
 	for _, tick := range ticks {
-		orderBook := s.converrToOrderBook(tick)
-		s.print(orderBook)
+		s.convertToOrderBook(tick)
 	}
 }
 
-func (s *Score) converrToOrderBook(tick streamer.Tick) OrderBook {
+func (s *Score) convertToOrderBook(tick streamer.Tick) OrderBook {
 	asks := make([]Level, len(tick.AskLevels))
 	bids := make([]Level, len(tick.BidLevels))
 
@@ -82,11 +87,67 @@ func (s *Score) converrToOrderBook(tick streamer.Tick) OrderBook {
 	sort.Slice(asks, func(i, j int) bool { return asks[i].Price < asks[j].Price })
 	sort.Slice(bids, func(i, j int) bool { return bids[i].Price > bids[j].Price })
 
-	return OrderBook{Asks: asks, Bids: bids}
+	ob := OrderBook{Asks: asks, Bids: bids}
+	s.print(ob)
+
+	return ob
 }
 
-func (s *Score) CalculateScore() {}
+func (s *Score) calculateBidsSizeMean(ob OrderBook) float64 {
+	var sum float64
+	count := min(LevelCount, len(ob.Bids))
 
+	// If there are no bids, return 0
+	if count == 0 {
+		return 0
+	}
+
+	for i := 0; i < count; i++ {
+		sum += ob.Bids[i].Quantity
+	}
+
+	return sum / float64(count)
+}
+
+func (s *Score) calculateBidsSizeStdDev(ob OrderBook) float64 {
+	mean := s.calculateBidsSizeMean(ob)
+
+	var sum float64
+	count := min(LevelCount, len(ob.Bids))
+
+	// If there are no bids, return 0
+	if count == 0 {
+		return 0
+	}
+
+	for i := 0; i < count; i++ {
+		diff := ob.Bids[i].Quantity - mean // X_i - μ_SPB
+		sum += diff * diff                 // (X_i - μ_SPB)^2
+	}
+
+	return math.Sqrt(sum / float64(count))
+}
+
+func (s *Score) calculateBidsSizeZScore(ob OrderBook) []float64 {
+	mean := s.calculateBidsSizeMean(ob)
+	stdDev := s.calculateBidsSizeStdDev(ob)
+
+	var zScores []float64
+	count := min(LevelCount, len(ob.Bids))
+
+	if count == 0 || stdDev == 0 {
+		return make([]float64, count)
+	}
+
+	for i := 0; i < count; i++ {
+		z := (ob.Bids[i].Quantity - mean) / stdDev // Z-score = (X_i - μ_SPB) / σ_SPB
+		zScores = append(zScores, z)
+	}
+
+	return zScores
+}
+
+// PRINT
 func (s *Score) clearConsole() {
 	switch runtime.GOOS {
 	case "windows":
@@ -102,7 +163,7 @@ func (s *Score) clearConsole() {
 
 func (s *Score) print(orderBook OrderBook) {
 	s.clearConsole()
-	log.Println()
+	log.Println("INJ_TL")
 
 	fmt.Println("+-------------------------+-------------------------+---------------+")
 	fmt.Println("|          BIDS           |           ASKS          |     Z-Score   |")
