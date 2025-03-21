@@ -97,16 +97,16 @@ func (s *Score) calculate(tick streamer.Tick) error {
 	//sort.Slice(bids, func(i, j int) bool { return bids[i].Price > bids[j].Price })
 
 	ob := OrderBook{Asks: asks, Bids: bids}
-	if err := s.calculateBidsSizeZScore(&ob); err != nil {
+	if err := s.calculateSizeZScore(&ob); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (s *Score) calculateBidsSizeMean(ob OrderBook) float64 {
+func (s *Score) calculateSizeMean(l []Level) float64 {
 	var sum float64
-	count := min(LevelCount, len(ob.Bids))
+	count := min(LevelCount, len(l))
 
 	// If there are no bids, return 0
 	if count == 0 {
@@ -114,17 +114,17 @@ func (s *Score) calculateBidsSizeMean(ob OrderBook) float64 {
 	}
 
 	for i := 0; i < count; i++ {
-		sum += ob.Bids[i].Quantity
+		sum += l[i].Quantity
 	}
 
 	return sum / float64(count)
 }
 
-func (s *Score) calculateBidsSizeStdDev(ob OrderBook) (float64, float64) {
-	mean := s.calculateBidsSizeMean(ob)
+func (s *Score) calculateSizeStdDev(l []Level) (float64, float64) {
+	mean := s.calculateSizeMean(l)
 
 	var sum float64
-	count := min(LevelCount, len(ob.Bids))
+	count := min(LevelCount, len(l))
 
 	// If there are no bids, return 0
 	if count == 0 {
@@ -132,16 +132,16 @@ func (s *Score) calculateBidsSizeStdDev(ob OrderBook) (float64, float64) {
 	}
 
 	for i := 0; i < count; i++ {
-		diff := ob.Bids[i].Quantity - mean // X_i - μ_SPB
-		sum += diff * diff                 // (X_i - μ_SPB)^2
+		diff := l[i].Quantity - mean // X_i - μ_SPB
+		sum += diff * diff           // (X_i - μ_SPB)^2
 	}
 
 	return math.Sqrt(sum / float64(count)), mean
 }
 
-func (s *Score) calculateBidsSizeZScore(ob *OrderBook) error {
-	//mean := s.calculateBidsSizeMean(*ob)
-	stdDev, mean := s.calculateBidsSizeStdDev(*ob)
+func (s *Score) calculateSizeZScore(ob *OrderBook) error {
+	bidsStdDev, bidsMean := s.calculateSizeStdDev(ob.Bids)
+	asksStdDev, asksMean := s.calculateSizeStdDev(ob.Asks)
 
 	count := min(LevelCount, len(ob.Bids))
 
@@ -149,13 +149,16 @@ func (s *Score) calculateBidsSizeZScore(ob *OrderBook) error {
 		return ErrLevelCountMustBeGreaterThanZero
 	}
 
-	if stdDev == 0 {
+	if bidsStdDev == 0 || asksStdDev == 0 {
 		return ErrStdDevMustBeGreaterThanZero
 	}
 
 	for i := 0; i < count; i++ {
-		z := (ob.Bids[i].Quantity - mean) / stdDev // Z-score = (X_i - μ_SPB) / σ_SPB
-		ob.Bids[i].ZScore = z
+		bz := (ob.Bids[i].Quantity - bidsMean) / bidsStdDev // Z-score = (X_i - μ_SPB) / σ_SPB
+		ob.Bids[i].ZScore = bz
+
+		az := (ob.Asks[i].Quantity - asksMean) / asksStdDev // Z-score = (X_i - μ_SPB) / σ_SPB
+		ob.Asks[i].ZScore = az
 	}
 
 	s.print(*ob)
@@ -213,7 +216,13 @@ func (s *Score) print(orderBook OrderBook) {
 
 		if i < len(orderBook.Asks) {
 			ask := orderBook.Asks[i]
-			askStr = fmt.Sprintf("%s | %s | %s", red(fmt.Sprintf("%10.2f", ask.Price)), red(fmt.Sprintf("%10.6f", ask.Quantity)), normal(fmt.Sprintf("%10.2f", ask.ZScore))) // TODO: Change asks zscore
+			if math.Abs(ask.ZScore) > OutliersDetection {
+				// Outlier
+				askStr = bg(fmt.Sprintf("%s | %s | %s", fmt.Sprintf("%10.2f", ask.Price), fmt.Sprintf("%10.6f", ask.Quantity), fmt.Sprintf("%10.2f", ask.ZScore)))
+			} else {
+				askStr = fmt.Sprintf("%s | %s | %s", red(fmt.Sprintf("%10.2f", ask.Price)), red(fmt.Sprintf("%10.6f", ask.Quantity)), normal(fmt.Sprintf("%10.2f", ask.ZScore)))
+			}
+
 		} else {
 			askStr = "                    "
 		}
