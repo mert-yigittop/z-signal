@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/starbase-343/ferengi/utils/multiplexer"
 	"github.com/starbase-343/ferengi/utils/streamer/prb"
+	"github.com/subspace-343/z-score/printer"
 	"github.com/subspace-343/z-score/score"
 	"log"
 	"os"
@@ -11,11 +12,8 @@ import (
 	"syscall"
 )
 
-// to configure variables
 var (
 	prbTicker = "eth_tl"
-	bnTicker  = "ethusdt"
-	bnfTicker = "ethusdt"
 )
 
 func init() {
@@ -41,7 +39,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	zScore := score.NewScore()
+	pr := printer.NewConsolePrinter()
+
+	zScore := score.NewScore(pr)
 	go zScore.AsyncRun(ctx, mpx, streamerCount)
 
 	select {

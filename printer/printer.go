@@ -1,7 +1,9 @@
 package printer
 
-import "github.com/subspace-343/z-score/score"
+import (
+	"github.com/subspace-343/z-score/order"
+)
 
 type Printer interface {
-	Print(book score.OrderBook)
+	Print(orderBook order.Book)
 }
