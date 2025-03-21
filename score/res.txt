@@ -1,0 +1,6 @@
+BenchmarkCalculateStdDevAndMean-11      188913072                6.192 ns/op
+BenchmarkCalculateSizeZScore-11         33918225                35.36 ns/op
+--
+
+BenchmarkCalculateStdDevAndMean-11      613461230                9.693 ns/op           0 B/op          0 allocs/op
+BenchmarkCalculateSizeZScore-11         157911606               37.76 ns/op            0 B/op          0 allocs/op

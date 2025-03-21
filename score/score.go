@@ -8,9 +8,6 @@ import (
 	"github.com/starbase-343/ferengi/utils/streamer"
 	"log"
 	"math"
-	"os"
-	"os/exec"
-	"runtime"
 	"sync/atomic"
 )
 
@@ -104,83 +101,54 @@ func (s *Score) calculate(tick streamer.Tick) error {
 	return nil
 }
 
-func (s *Score) calculateSizeMean(l []Level) float64 {
-	var sum float64
+func (s *Score) calculateStdDevAndMean(l []Level) (float64, float64) {
 	count := min(LevelCount, len(l))
-
-	// If there are no bids, return 0
 	if count == 0 {
-		return 0
+		return 0, 0
 	}
 
+	var sum, sqSum float64
 	for i := 0; i < count; i++ {
-		sum += l[i].Quantity
+		q := l[i].Quantity
+		sum += q
+		sqSum += q * q
 	}
 
-	return sum / float64(count)
-}
-
-func (s *Score) calculateSizeStdDev(l []Level) (float64, float64) {
-	mean := s.calculateSizeMean(l)
-
-	var sum float64
-	count := min(LevelCount, len(l))
-
-	// If there are no bids, return 0
-	if count == 0 {
+	mean := sum / float64(count)
+	variance := (sqSum / float64(count)) - (mean * mean)
+	if variance == 0 {
 		return 0, mean
 	}
 
-	for i := 0; i < count; i++ {
-		diff := l[i].Quantity - mean // X_i - μ_SPB
-		sum += diff * diff           // (X_i - μ_SPB)^2
-	}
-
-	return math.Sqrt(sum / float64(count)), mean
+	return math.Sqrt(variance), mean
 }
 
 func (s *Score) calculateSizeZScore(ob *OrderBook) error {
-	bidsStdDev, bidsMean := s.calculateSizeStdDev(ob.Bids)
-	asksStdDev, asksMean := s.calculateSizeStdDev(ob.Asks)
+	countBids := min(LevelCount, len(ob.Bids))
+	countAsks := min(LevelCount, len(ob.Asks))
 
-	count := min(LevelCount, len(ob.Bids))
-
-	if count == 0 {
+	if countBids == 0 || countAsks == 0 {
 		return ErrLevelCountMustBeGreaterThanZero
 	}
+
+	bidsStdDev, bidsMean := s.calculateStdDevAndMean(ob.Bids)
+	asksStdDev, asksMean := s.calculateStdDevAndMean(ob.Asks)
 
 	if bidsStdDev == 0 || asksStdDev == 0 {
 		return ErrStdDevMustBeGreaterThanZero
 	}
 
-	for i := 0; i < count; i++ {
-		bz := (ob.Bids[i].Quantity - bidsMean) / bidsStdDev // Z-score = (X_i - μ_SPB) / σ_SPB
-		ob.Bids[i].ZScore = bz
-
-		az := (ob.Asks[i].Quantity - asksMean) / asksStdDev // Z-score = (X_i - μ_SPB) / σ_SPB
-		ob.Asks[i].ZScore = az
+	for i := 0; i < countBids; i++ { // or countAsks
+		ob.Bids[i].ZScore = (ob.Bids[i].Quantity - bidsMean) / bidsStdDev
+		ob.Asks[i].ZScore = (ob.Asks[i].Quantity - asksMean) / asksStdDev
 	}
 
-	s.print(*ob)
+	//s.print(*ob)
 	return nil
 }
 
-// PRINT
-func (s *Score) clearConsole() {
-	switch runtime.GOOS {
-	case "windows":
-		cmd := exec.Command("cmd", "/c", "cls")
-		cmd.Stdout = os.Stdout
-		cmd.Run()
-	default:
-		cmd := exec.Command("clear")
-		cmd.Stdout = os.Stdout
-		cmd.Run()
-	}
-}
-
 func (s *Score) print(orderBook OrderBook) {
-	s.clearConsole()
+	fmt.Print("\033[H\033[2J")
 	log.Println("Pair: ETH_TL | Outliers Detection: 1.5 | Level Count: 20")
 
 	fmt.Println("+--------------------------------------+--------------------------------------+")
